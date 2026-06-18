@@ -44,7 +44,7 @@ class EldercareInstallerTests(unittest.TestCase):
     def test_hooks_return_expected_shapes(self):
         ctx = _pre_llm_call(platform="weixin")
         self.assertIsInstance(ctx, dict)
-        self.assertIn("Chinese", ctx["context"])
+        self.assertIn("小小力", ctx["context"])
         self.assertIsNone(_pre_llm_call(platform="discord"))
         self.assertEqual(_transform_llm_output(response_text="作为AI语言模型，我可以帮您。"), "我可以帮您。")
 
@@ -68,7 +68,7 @@ class EldercareInstallerTests(unittest.TestCase):
         self.assertTrue(config["platforms"]["weixin"]["enabled"])
         self.assertEqual(config["platforms"]["weixin"]["extra"]["user_allowed_commands"], [])
         self.assertEqual(config["eldercare"]["guardian_channels"], ["telegram"])
-        self.assertIn("中文助手", (profile / "SOUL.md").read_text(encoding="utf-8"))
+        self.assertIn("小小力", (profile / "SOUL.md").read_text(encoding="utf-8"))
         self.assertIn("gateway setup", result.to_human())
         self.assertIn("微信尚未连接", result.to_human())
 
