@@ -21,12 +21,6 @@ def _pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
 
 def _transform_llm_output(**kwargs: Any) -> str | None:
     text = kwargs.get("response_text")
-    if text is None:
-        text = kwargs.get("text")
-    if text is None:
-        text = kwargs.get("output")
-    if text is None:
-        text = kwargs.get("response")
     if not isinstance(text, str):
         return None
     cleaned = clean_response(text)

@@ -122,8 +122,12 @@ def apply_profile(
         result.errors.extend(doctor.errors)
         result.ok = result.ok and doctor.ok
         result.data.update(doctor.data)
+    token_ready = _weixin_credentials_ready(desired)
+    result.data["weixin_credentials_ready"] = token_ready
     if dry_run and result.ok:
         result.add("Dry run complete; no files were written.")
+    elif not dry_run and not token_ready:
+        result.add(f"Next: hermes -p {PROFILE_NAME} gateway setup  # scan QR code to connect Weixin first")
     elif result.ok:
         result.add(f"Next: hermes -p {PROFILE_NAME} gateway run")
     return result
@@ -262,12 +266,11 @@ def _diagnose(profile_dir: Path, config: dict[str, Any]) -> OperationResult:
     if not isinstance(weixin, dict) or not weixin.get("enabled"):
         result.fail("Weixin platform is not enabled in the eldercare profile.")
     extra = weixin.get("extra", {}) if isinstance(weixin, dict) else {}
-    token = weixin.get("token") if isinstance(weixin, dict) else None
-    account_id = extra.get("account_id") if isinstance(extra, dict) else None
-    if not token and not os.getenv("WEIXIN_TOKEN"):
-        result.fail("Weixin token is missing. Run Hermes Weixin setup or set WEIXIN_TOKEN / platforms.weixin.token.")
-    if not account_id and not os.getenv("WEIXIN_ACCOUNT_ID"):
-        result.fail("Weixin account_id is missing. Run Hermes Weixin setup or set WEIXIN_ACCOUNT_ID / platforms.weixin.extra.account_id.")
+    if not _weixin_credentials_ready(config):
+        result.fail(
+            "微信尚未连接。运行 `hermes -p hermes-eldercare gateway setup` 扫码登录即可，"
+            "凭据会自动保存，无需手动配置。"
+        )
 
     try:
         from gateway.platforms.weixin import check_weixin_requirements
@@ -292,6 +295,15 @@ def _diagnose(profile_dir: Path, config: dict[str, Any]) -> OperationResult:
     if not (profile_dir / "SOUL.md").is_file():
         result.fail("SOUL.md is missing from the eldercare profile.")
     return result
+
+
+def _weixin_credentials_ready(config: dict[str, Any]) -> bool:
+    platforms = config.get("platforms", {}) if isinstance(config, dict) else {}
+    weixin = platforms.get(WEIXIN_PLATFORM, {}) if isinstance(platforms, dict) else {}
+    extra = weixin.get("extra", {}) if isinstance(weixin, dict) else {}
+    token = weixin.get("token") if isinstance(weixin, dict) else None
+    account_id = extra.get("account_id") if isinstance(extra, dict) else None
+    return bool((token or os.getenv("WEIXIN_TOKEN")) and (account_id or os.getenv("WEIXIN_ACCOUNT_ID")))
 
 
 def _normalize_channels(channels: list[str] | None) -> tuple[str, ...]:

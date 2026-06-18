@@ -69,6 +69,8 @@ class EldercareInstallerTests(unittest.TestCase):
         self.assertEqual(config["platforms"]["weixin"]["extra"]["user_allowed_commands"], [])
         self.assertEqual(config["eldercare"]["guardian_channels"], ["telegram"])
         self.assertIn("中文助手", (profile / "SOUL.md").read_text(encoding="utf-8"))
+        self.assertIn("gateway setup", result.to_human())
+        self.assertIn("微信尚未连接", result.to_human())
 
     def test_apply_profile_dry_run_does_not_write(self):
         tmp_path = self._use_tmp_home()

@@ -18,9 +18,14 @@ and a small setup/diagnostic CLI.
 
 ## Install For Development
 
+Recommended for development:
+
 ```bash
 pip install -e .
 ```
+
+Use either pip installation or Hermes' directory-plugin install flow, not both.
+Using both can register the hooks twice.
 
 Preview profile/config changes:
 
@@ -38,6 +43,16 @@ Enable the plugin and run Hermes with the eldercare profile:
 
 ```bash
 hermes plugins enable hermes-eldercare
+hermes -p hermes-eldercare gateway setup
+```
+
+Choose Weixin in `gateway setup`, scan the QR code, and confirm login in
+Weixin. Hermes saves the Weixin credentials automatically; do not edit
+`WEIXIN_TOKEN` or `WEIXIN_ACCOUNT_ID` by hand.
+
+After Weixin is connected:
+
+```bash
 hermes -p hermes-eldercare gateway run
 ```
 
@@ -82,7 +97,9 @@ and a guardian dashboard are out of scope for the first version.
 
 ## Test
 
+Requires Python 3.10+.
+
 ```bash
-python -m py_compile __init__.py hermes_eldercare/*.py tests/test_eldercare_installer.py
-PYTHONPATH=. python tests/test_eldercare_installer.py
+python3.10 -m py_compile __init__.py hermes_eldercare/*.py tests/test_eldercare_installer.py
+PYTHONPATH=. python3.10 tests/test_eldercare_installer.py
 ```
