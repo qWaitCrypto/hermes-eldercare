@@ -45,7 +45,11 @@ class EldercareInstallerTests(unittest.TestCase):
         ctx = _pre_llm_call(platform="weixin")
         self.assertIsInstance(ctx, dict)
         self.assertIn("小小力", ctx["context"])
-        self.assertIsNone(_pre_llm_call(platform="discord"))
+        # guardian channels (discord/telegram/slack) must also receive TURN_CONTEXT
+        self.assertIsNotNone(_pre_llm_call(platform="discord"))
+        self.assertIsNotNone(_pre_llm_call(platform="telegram"))
+        # explicitly excluded unrelated platforms return None
+        self.assertIsNone(_pre_llm_call(platform="teams"))
         self.assertEqual(_transform_llm_output(response_text="作为AI语言模型，我可以帮您。"), "我可以帮您。")
 
     def test_apply_profile_writes_profile_config(self):

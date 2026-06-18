@@ -198,11 +198,11 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
         platforms_display = {}
         display["platforms"] = platforms_display
     platforms_display[WEIXIN_PLATFORM] = {
-        "tool_progress": "off",
-        "streaming": False,
-        "interim_assistant_messages": False,
-        "long_running_notifications": False,
-        "busy_ack_detail": False,
+        "tool_progress": "compact",       # show brief progress so the elder knows the bot is working
+        "streaming": False,               # weixin adaptor doesn't support message edits; typing indicator is separate
+        "interim_assistant_messages": True,  # show intermediate replies so the elder doesn't think it's stuck
+        "long_running_notifications": True,  # notify on slow operations
+        "busy_ack_detail": False,         # suppress low-level busy detail
     }
 
     approvals = cfg.setdefault("approvals", {})
@@ -251,7 +251,7 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
 
 def _merged_platform_toolsets(raw: Any) -> dict[str, Any]:
     toolsets = copy.deepcopy(raw) if isinstance(raw, dict) else {}
-    toolsets[WEIXIN_PLATFORM] = ["web", "cronjob", "memory", "session_search", "clarify"]
+    toolsets[WEIXIN_PLATFORM] = ["web", "cronjob", "memory", "session_search"]
     return toolsets
 
 

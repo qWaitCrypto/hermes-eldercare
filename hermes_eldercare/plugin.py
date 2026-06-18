@@ -12,9 +12,13 @@ from .style import clean_response
 
 def _pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
     platform = str(kwargs.get("platform") or "").lower()
-    # Gateway calls provide platform. CLI/tests may not; inject anyway when the
-    # plugin is enabled so the dedicated profile stays consistently styled.
-    if platform and platform not in {"weixin", "gateway", "cli", "local"}:
+    # Inject on all eldercare-relevant platforms: the older adult channel (weixin),
+    # all potential guardian channels (discord, telegram, slack, etc.), and
+    # internal runtime platforms (gateway, cli, local). TURN_CONTEXT itself
+    # contains the channel-awareness logic that distinguishes elder vs family.
+    # Only block platforms that are clearly unrelated to this profile.
+    _EXCLUDED = {"teams", "matrix"}
+    if platform and platform in _EXCLUDED:
         return None
     return {"context": ELDERCARE_TURN_CONTEXT}
 
