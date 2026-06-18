@@ -1,0 +1,6 @@
+name: hermes-eldercare
+version: 0.1.0
+description: Weixin-first senior-friendly Hermes profile and prompt policy
+provides_hooks:
+  - pre_llm_call
+  - transform_llm_output
