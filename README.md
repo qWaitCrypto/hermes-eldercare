@@ -14,7 +14,7 @@ and a small setup/diagnostic CLI.
 - Guides reminder creation through Hermes' existing `cronjob` / cron support.
 - Prompts the assistant to handle safety, medical, fraud, banking, and verification-code risks conservatively.
 - Keeps normal chats private by default; guardian/family notification is only for high-risk situations or explicit user intent.
-- Keeps Weixin quiet: no streaming, no tool-progress chatter, no runtime footer.
+- Keeps Weixin clean: no tool-progress chatter, no runtime footer, while preserving normal typing/interim assistant activity where Hermes supports it.
 
 ## Install For Development
 

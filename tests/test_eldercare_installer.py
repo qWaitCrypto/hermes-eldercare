@@ -71,22 +71,64 @@ class EldercareInstallerTests(unittest.TestCase):
         self.assertEqual(config["display"]["language"], "zh")
         self.assertTrue(config["platforms"]["weixin"]["enabled"])
         self.assertEqual(config["platforms"]["weixin"]["extra"]["user_allowed_commands"], [])
+        self.assertNotIn("platform_toolsets", config)
         # Elder must never see approval prompts or BLOCKED messages: commands
         # run silently (mode=off). The hardline floor still blocks catastrophic
         # commands regardless. cron jobs are allowed to run.
         self.assertEqual(config["approvals"]["mode"], "off")
         self.assertEqual(config["approvals"]["cron_mode"], "approve")
-        # Weixin display must be fully silent so no tool progress / interim
-        # status / long-running heartbeat ever surfaces to the elder.
+        # Weixin display hides tool/system chrome while preserving natural
+        # assistant activity such as typing and model-authored interim replies.
         weixin_display = config["display"]["platforms"]["weixin"]
         self.assertEqual(weixin_display["tool_progress"], "off")
-        self.assertFalse(weixin_display["interim_assistant_messages"])
+        self.assertTrue(weixin_display["interim_assistant_messages"])
         self.assertFalse(weixin_display["long_running_notifications"])
         self.assertFalse(weixin_display["busy_ack_detail"])
         self.assertEqual(config["eldercare"]["guardian_channels"], ["telegram"])
         self.assertIn("小小力", (profile / "SOUL.md").read_text(encoding="utf-8"))
         self.assertIn("gateway setup", result.to_human())
         self.assertIn("微信尚未连接", result.to_human())
+
+    def test_apply_profile_removes_legacy_weixin_toolset_override(self):
+        tmp_path = self._use_tmp_home()
+        profile = tmp_path / ".hermes" / "profiles" / "hermes-eldercare"
+        profile.mkdir(parents=True)
+        (profile / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "platform_toolsets": {
+                        "weixin": ["web", "cronjob", "memory", "session_search"],
+                        "telegram": ["hermes-telegram"],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = apply_profile()
+
+        self.assertTrue(result.changed)
+        config = yaml.safe_load((profile / "config.yaml").read_text(encoding="utf-8"))
+        self.assertNotIn("weixin", config["platform_toolsets"])
+        self.assertEqual(config["platform_toolsets"]["telegram"], ["hermes-telegram"])
+
+    def test_doctor_accepts_weixin_credentials_from_profile_env(self):
+        tmp_path = self._use_tmp_home()
+        profile = tmp_path / ".hermes" / "profiles" / "hermes-eldercare"
+        profile.mkdir(parents=True)
+        (profile / "config.yaml").write_text(
+            yaml.safe_dump({"platforms": {"weixin": {"enabled": True, "extra": {}}}}),
+            encoding="utf-8",
+        )
+        (profile / ".env").write_text(
+            "WEIXIN_ACCOUNT_ID=account-1\nWEIXIN_TOKEN=token-1\n",
+            encoding="utf-8",
+        )
+        (profile / "SOUL.md").write_text("小小力", encoding="utf-8")
+
+        result = doctor_profile()
+
+        self.assertNotIn("微信尚未连接", result.to_human())
 
     def test_apply_profile_dry_run_does_not_write(self):
         tmp_path = self._use_tmp_home()

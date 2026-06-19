@@ -22,6 +22,9 @@ from .constants import (
 from .prompts import ELDERCARE_SOUL_MD
 
 
+_LEGACY_WEIXIN_TOOLSETS = ("web", "cronjob", "memory", "session_search")
+
+
 @dataclass
 class OperationResult:
     ok: bool = True
@@ -122,7 +125,7 @@ def apply_profile(
         result.errors.extend(doctor.errors)
         result.ok = result.ok and doctor.ok
         result.data.update(doctor.data)
-    token_ready = _weixin_credentials_ready(desired)
+    token_ready = _weixin_credentials_ready(desired, profile_dir=profile_dir)
     result.data["weixin_credentials_ready"] = token_ready
     if dry_run and result.ok:
         result.add("Dry run complete; no files were written.")
@@ -185,7 +188,7 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
     if isinstance(disabled, list) and PLUGIN_NAME in disabled:
         plugins["disabled"] = [item for item in disabled if item != PLUGIN_NAME]
 
-    cfg["platform_toolsets"] = _merged_platform_toolsets(cfg.get("platform_toolsets"))
+    _remove_weixin_toolset_override(cfg)
 
     display = cfg.setdefault("display", {})
     if not isinstance(display, dict):
@@ -197,18 +200,15 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
     if not isinstance(platforms_display, dict):
         platforms_display = {}
         display["platforms"] = platforms_display
-    # Weixin's Hermes default tier is already _TIER_LOW (silent): tool_progress
-    # off, no interim assistant messages, no long-running notifications. The
-    # elder must see ONLY 小小力's replies — never tool progress, "working…"
-    # heartbeats, intermediate status, or browser/tool error breadcrumbs. We
-    # pin every chatter channel off explicitly so a future Hermes default change
-    # can't silently re-expose internals to the elder.
+    # Keep tool chrome and low-level runtime details out of Weixin, but do not
+    # suppress natural assistant activity. The elder should still see typing and
+    # model-authored interim replies when Hermes can deliver them.
     platforms_display[WEIXIN_PLATFORM] = {
-        "tool_progress": "off",              # never narrate tool calls to the elder
-        "streaming": False,                  # weixin adaptor can't edit messages
-        "interim_assistant_messages": False,  # no mid-turn commentary
-        "long_running_notifications": False,  # no "⏳ Working…" heartbeats
-        "busy_ack_detail": False,            # no low-level busy detail
+        "tool_progress": "off",
+        "show_reasoning": False,
+        "interim_assistant_messages": True,
+        "long_running_notifications": False,
+        "busy_ack_detail": False,
     }
 
     approvals = cfg.setdefault("approvals", {})
@@ -263,10 +263,24 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
     return cfg
 
 
-def _merged_platform_toolsets(raw: Any) -> dict[str, Any]:
-    toolsets = copy.deepcopy(raw) if isinstance(raw, dict) else {}
-    toolsets[WEIXIN_PLATFORM] = ["web", "cronjob", "memory", "session_search"]
-    return toolsets
+def _remove_weixin_toolset_override(cfg: dict[str, Any]) -> None:
+    """Let Weixin use Hermes' normal default tools instead of a special list."""
+    toolsets = cfg.get("platform_toolsets")
+    if not isinstance(toolsets, dict):
+        return
+    current = toolsets.get(WEIXIN_PLATFORM)
+    if current is None:
+        return
+    # Older plugin versions wrote a narrow Weixin list. Product policy is now
+    # explicit: the elder channel should not have a different tool surface from
+    # the default channel, so remove any per-Weixin override and let Hermes fall
+    # back to its platform default resolution.
+    if isinstance(current, list) and (
+        tuple(str(item) for item in current) == _LEGACY_WEIXIN_TOOLSETS or not current
+    ):
+        toolsets.pop(WEIXIN_PLATFORM, None)
+    if not toolsets:
+        cfg.pop("platform_toolsets", None)
 
 
 def _diagnose(profile_dir: Path, config: dict[str, Any]) -> OperationResult:
@@ -280,7 +294,7 @@ def _diagnose(profile_dir: Path, config: dict[str, Any]) -> OperationResult:
     if not isinstance(weixin, dict) or not weixin.get("enabled"):
         result.fail("Weixin platform is not enabled in the eldercare profile.")
     extra = weixin.get("extra", {}) if isinstance(weixin, dict) else {}
-    if not _weixin_credentials_ready(config):
+    if not _weixin_credentials_ready(config, profile_dir=profile_dir):
         result.fail(
             "微信尚未连接。运行 `hermes -p hermes-eldercare gateway setup` 扫码登录即可，"
             "凭据会自动保存，无需手动配置。"
@@ -311,13 +325,41 @@ def _diagnose(profile_dir: Path, config: dict[str, Any]) -> OperationResult:
     return result
 
 
-def _weixin_credentials_ready(config: dict[str, Any]) -> bool:
+def _weixin_credentials_ready(config: dict[str, Any], *, profile_dir: Path | None = None) -> bool:
     platforms = config.get("platforms", {}) if isinstance(config, dict) else {}
     weixin = platforms.get(WEIXIN_PLATFORM, {}) if isinstance(platforms, dict) else {}
     extra = weixin.get("extra", {}) if isinstance(weixin, dict) else {}
     token = weixin.get("token") if isinstance(weixin, dict) else None
     account_id = extra.get("account_id") if isinstance(extra, dict) else None
-    return bool((token or os.getenv("WEIXIN_TOKEN")) and (account_id or os.getenv("WEIXIN_ACCOUNT_ID")))
+    env_values = _read_env_file(profile_dir / ".env") if profile_dir is not None else {}
+    return bool(
+        (token or os.getenv("WEIXIN_TOKEN") or env_values.get("WEIXIN_TOKEN"))
+        and (
+            account_id
+            or os.getenv("WEIXIN_ACCOUNT_ID")
+            or env_values.get("WEIXIN_ACCOUNT_ID")
+        )
+    )
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key:
+            values[key] = value
+    return values
 
 
 def _normalize_channels(channels: list[str] | None) -> tuple[str, ...]:
