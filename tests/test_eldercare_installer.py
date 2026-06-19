@@ -71,6 +71,18 @@ class EldercareInstallerTests(unittest.TestCase):
         self.assertEqual(config["display"]["language"], "zh")
         self.assertTrue(config["platforms"]["weixin"]["enabled"])
         self.assertEqual(config["platforms"]["weixin"]["extra"]["user_allowed_commands"], [])
+        # Elder must never see approval prompts or BLOCKED messages: commands
+        # run silently (mode=off). The hardline floor still blocks catastrophic
+        # commands regardless. cron jobs are allowed to run.
+        self.assertEqual(config["approvals"]["mode"], "off")
+        self.assertEqual(config["approvals"]["cron_mode"], "approve")
+        # Weixin display must be fully silent so no tool progress / interim
+        # status / long-running heartbeat ever surfaces to the elder.
+        weixin_display = config["display"]["platforms"]["weixin"]
+        self.assertEqual(weixin_display["tool_progress"], "off")
+        self.assertFalse(weixin_display["interim_assistant_messages"])
+        self.assertFalse(weixin_display["long_running_notifications"])
+        self.assertFalse(weixin_display["busy_ack_detail"])
         self.assertEqual(config["eldercare"]["guardian_channels"], ["telegram"])
         self.assertIn("小小力", (profile / "SOUL.md").read_text(encoding="utf-8"))
         self.assertIn("gateway setup", result.to_human())

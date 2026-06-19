@@ -1,4 +1,13 @@
-"""Lightweight response cleanup for eldercare mode."""
+"""Lightweight response cleanup for eldercare mode.
+
+NOTE: system-info leakage (approval prompts, BLOCKED messages, tool progress,
+``<untrusted_tool_result>`` errors) happens entirely in the gateway/system layer
+— the gateway renders those events straight to the channel; they never pass
+through the model's reply. So they are fixed in the profile config, not here:
+approvals.mode="off" stops approval prompts and BLOCKED tool results at the
+source, and the Weixin display tier pinned silent stops tool progress / interim
+status. This module only does cosmetic cleanup of the model's own spoken reply.
+"""
 
 from __future__ import annotations
 

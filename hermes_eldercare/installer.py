@@ -197,20 +197,34 @@ def _apply_eldercare_config(config: dict[str, Any], *, guardian_channels: tuple[
     if not isinstance(platforms_display, dict):
         platforms_display = {}
         display["platforms"] = platforms_display
+    # Weixin's Hermes default tier is already _TIER_LOW (silent): tool_progress
+    # off, no interim assistant messages, no long-running notifications. The
+    # elder must see ONLY 小小力's replies — never tool progress, "working…"
+    # heartbeats, intermediate status, or browser/tool error breadcrumbs. We
+    # pin every chatter channel off explicitly so a future Hermes default change
+    # can't silently re-expose internals to the elder.
     platforms_display[WEIXIN_PLATFORM] = {
-        "tool_progress": "compact",       # show brief progress so the elder knows the bot is working
-        "streaming": False,               # weixin adaptor doesn't support message edits; typing indicator is separate
-        "interim_assistant_messages": True,  # show intermediate replies so the elder doesn't think it's stuck
-        "long_running_notifications": True,  # notify on slow operations
-        "busy_ack_detail": False,         # suppress low-level busy detail
+        "tool_progress": "off",              # never narrate tool calls to the elder
+        "streaming": False,                  # weixin adaptor can't edit messages
+        "interim_assistant_messages": False,  # no mid-turn commentary
+        "long_running_notifications": False,  # no "⏳ Working…" heartbeats
+        "busy_ack_detail": False,            # no low-level busy detail
     }
 
     approvals = cfg.setdefault("approvals", {})
     if not isinstance(approvals, dict):
         approvals = {}
         cfg["approvals"] = approvals
-    approvals.setdefault("mode", "smart")
-    approvals.setdefault("cron_mode", "approve")
+    # The elder on Weixin cannot answer an approval prompt — and must never see
+    # one. Under "smart"/"manual" a command like curl escalates to a gateway
+    # approval request that gets rendered into the chat, then times out into a
+    # raw "BLOCKED: ... has NOT consented ..." tool result. Both leak system
+    # internals to the elder. Force "off": commands run silently with no prompt
+    # and no BLOCKED message. Catastrophic commands (rm -rf /, mkfs, fork bomb,
+    # sudo-stdin) are still stopped by Hermes' hardline floor, which fires
+    # unconditionally before the mode=off bypass — so "off" is not "yolo".
+    approvals["mode"] = "off"
+    approvals["cron_mode"] = "approve"
 
     platforms = cfg.setdefault("platforms", {})
     if not isinstance(platforms, dict):
