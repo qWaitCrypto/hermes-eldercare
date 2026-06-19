@@ -20,3 +20,11 @@ hermes-eldercare = "hermes_eldercare.plugin"
 
 [tool.setuptools.packages.find]
 include = ["hermes_eldercare*"]
+
+[tool.pytest.ini_options]
+# The repo root has an __init__.py used only as the Hermes directory-plugin
+# entrypoint (which uses a package-relative import). Without this, pytest treats
+# the repo root as a package and imports that __init__.py with no parent package,
+# breaking the relative import. importlib mode + an explicit testpaths avoids it.
+addopts = "--import-mode=importlib"
+testpaths = ["tests"]
